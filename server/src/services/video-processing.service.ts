@@ -10,6 +10,8 @@ import {
 
 import { transcribeAudio } from "./transcription.service.js";
 
+import { analyzeTranscriptForClips } from "./clip-analysis.service.js";
+
 import { downloadYouTubeVideo } from "./ytdlp.service.js";
 
 export async function startVideoProcessing(
@@ -43,7 +45,7 @@ export async function startVideoProcessing(
 
     /*
      * STEP 2
-     * Read metadata
+     * Probe metadata
      */
 
     updateProcessingJob(
@@ -110,10 +112,6 @@ export async function startVideoProcessing(
         job.id,
       );
 
-    /*
-     * Current end of pipeline
-     */
-
     updateProcessingJob(
       jobId,
       {
@@ -142,6 +140,45 @@ export async function startVideoProcessing(
           transcriptionResult
             .transcript
             .words.length,
+      },
+    );
+
+    /*
+     * STEP 5
+     * AI clip analysis
+     */
+
+    updateProcessingJob(
+      jobId,
+      {
+        status:
+          "analyzing_clips",
+      },
+    );
+
+    const analysisResult =
+      await analyzeTranscriptForClips(
+        transcriptionResult
+          .transcriptPath,
+        job.id,
+      );
+
+    /*
+     * Current end of pipeline
+     */
+
+    updateProcessingJob(
+      jobId,
+      {
+        status: "clips_ready",
+
+        analysisPath:
+          analysisResult
+            .analysisPath,
+
+        clipCandidateCount:
+          analysisResult
+            .clips.length,
       },
     );
   } catch (error) {

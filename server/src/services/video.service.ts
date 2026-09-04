@@ -78,6 +78,9 @@ interface UpdateProcessingJobInput {
   transcriptSegmentCount?: number;
   transcriptWordCount?: number;
 
+  analysisPath?: string;
+  clipCandidateCount?: number;
+
   error?: string;
 }
 

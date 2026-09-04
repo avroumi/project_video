@@ -8,11 +8,14 @@ export type ProcessingStatus =
   | "audio_ready"
   | "transcribing"
   | "transcript_ready"
+  | "analyzing_clips"
+  | "clips_ready"
   | "failed";
 
 export interface ProcessingJob {
   id: string;
   sourceUrl: string;
+
   status: ProcessingStatus;
 
   createdAt: string;
@@ -30,6 +33,9 @@ export interface ProcessingJob {
 
   transcriptSegmentCount?: number;
   transcriptWordCount?: number;
+
+  analysisPath?: string;
+  clipCandidateCount?: number;
 
   error?: string;
 }
