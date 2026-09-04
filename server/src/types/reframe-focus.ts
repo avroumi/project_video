@@ -1,33 +1,22 @@
 export type ReframeStrategy =
-  | "face"
+  | "dynamic_face"
   | "center";
 
-export interface ReframeFocus {
+export interface ReframeTrackPoint {
+  time: number;
+  focusX: number;
+}
+
+export interface ReframeTrack {
   strategy: ReframeStrategy;
 
-  focusX: number;
-  focusY: number;
-
-  faceWidthRatio: number;
-  faceHeightRatio: number;
+  durationSeconds: number;
 
   sampleCount: number;
   detectionCount: number;
-}
+  acceptedCount: number;
 
-export interface AppliedReframe {
-  strategy: ReframeStrategy;
+  detectionRate: number;
 
-  focusX: number;
-  focusY: number;
-
-  safeFocusY: number;
-
-  zoom: number;
-
-  cropX: number;
-  cropY: number;
-
-  cropWidth: number;
-  cropHeight: number;
+  points: ReframeTrackPoint[];
 }

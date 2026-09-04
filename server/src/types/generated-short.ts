@@ -1,3 +1,5 @@
+import type { ReframeStrategy } from "./reframe-focus.js";
+
 export interface GeneratedShort {
   id: string;
 
@@ -18,6 +20,10 @@ export interface GeneratedShort {
 
   width: number;
   height: number;
+
+  reframeStrategy: ReframeStrategy;
+  reframeDetectionRate: number;
+  reframePointCount: number;
 }
 
 export interface GeneratedShortManifest {

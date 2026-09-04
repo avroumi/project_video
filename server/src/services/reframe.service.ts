@@ -1,13 +1,18 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 
-import type { ReframeFocus } from "../types/reframe-focus.js";
+import type {
+  ReframeTrack,
+  ReframeTrackPoint,
+} from "../types/reframe-focus.js";
 
-interface DetectReframeFocusInput {
+interface DetectReframeTrackInput {
   videoPath: string;
+
   start: number;
   end: number;
-  samples?: number;
+
+  interval?: number;
 }
 
 function isObject(
@@ -19,35 +24,71 @@ function isObject(
   );
 }
 
-function isReframeFocus(
+function isReframeTrackPoint(
   value: unknown,
-): value is ReframeFocus {
+): value is ReframeTrackPoint {
   if (!isObject(value)) {
     return false;
   }
 
   return (
-    (
-      value.strategy === "face" ||
-      value.strategy === "center"
-    ) &&
-    typeof value.focusX === "number" &&
-    typeof value.focusY === "number" &&
-    typeof value.faceWidthRatio === "number" &&
-    typeof value.faceHeightRatio === "number" &&
-    typeof value.sampleCount === "number" &&
-    typeof value.detectionCount === "number"
+    typeof value.time === "number" &&
+    typeof value.focusX === "number"
   );
 }
 
-export async function detectReframeFocus(
-  input: DetectReframeFocusInput,
-): Promise<ReframeFocus> {
+function isReframeTrack(
+  value: unknown,
+): value is ReframeTrack {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  if (
+    value.strategy !==
+      "dynamic_face" &&
+    value.strategy !==
+      "center"
+  ) {
+    return false;
+  }
+
+  if (
+    typeof value.durationSeconds !==
+      "number" ||
+    typeof value.sampleCount !==
+      "number" ||
+    typeof value.detectionCount !==
+      "number" ||
+    typeof value.acceptedCount !==
+      "number" ||
+    typeof value.detectionRate !==
+      "number"
+  ) {
+    return false;
+  }
+
+  if (
+    !Array.isArray(
+      value.points,
+    )
+  ) {
+    return false;
+  }
+
+  return value.points.every(
+    isReframeTrackPoint,
+  );
+}
+
+export async function detectReframeTrack(
+  input: DetectReframeTrackInput,
+): Promise<ReframeTrack> {
   const {
     videoPath,
     start,
     end,
-    samples = 10,
+    interval = 0.75,
   } = input;
 
   const absoluteVideoPath =
@@ -60,7 +101,7 @@ export async function detectReframeFocus(
     path.resolve(
       process.cwd(),
       "python",
-      "detect_face_focus.py",
+      "detect_face_track.py",
     );
 
   const pythonBinary =
@@ -84,12 +125,15 @@ export async function detectReframeFocus(
     "--end",
     end.toString(),
 
-    "--samples",
-    samples.toString(),
+    "--interval",
+    interval.toString(),
   ];
 
   return new Promise(
-    (resolve, reject) => {
+    (
+      resolve,
+      reject,
+    ) => {
       const childProcess =
         spawn(
           pythonBinary,
@@ -104,24 +148,32 @@ export async function detectReframeFocus(
 
       childProcess.stdout.on(
         "data",
-        (data: Buffer) => {
-          stdout += data.toString();
+        (
+          data: Buffer,
+        ) => {
+          stdout +=
+            data.toString();
         },
       );
 
       childProcess.stderr.on(
         "data",
-        (data: Buffer) => {
-          stderr += data.toString();
+        (
+          data: Buffer,
+        ) => {
+          stderr +=
+            data.toString();
         },
       );
 
       childProcess.on(
         "error",
-        (error) => {
+        (
+          error,
+        ) => {
           reject(
             new Error(
-              `Unable to start face detector: ${error.message}`,
+              `Unable to start reframe tracker: ${error.message}`,
             ),
           );
         },
@@ -129,12 +181,16 @@ export async function detectReframeFocus(
 
       childProcess.on(
         "close",
-        (exitCode) => {
-          if (exitCode !== 0) {
+        (
+          exitCode,
+        ) => {
+          if (
+            exitCode !== 0
+          ) {
             reject(
               new Error(
                 stderr.trim() ||
-                  `Face detector exited with code ${exitCode}`,
+                  `Reframe tracker exited with code ${exitCode}`,
               ),
             );
 
@@ -151,7 +207,7 @@ export async function detectReframeFocus(
           } catch {
             reject(
               new Error(
-                "FACE_DETECTION_INVALID_JSON",
+                "REFRAME_TRACK_INVALID_JSON",
               ),
             );
 
@@ -159,20 +215,22 @@ export async function detectReframeFocus(
           }
 
           if (
-            !isReframeFocus(
+            !isReframeTrack(
               parsed,
             )
           ) {
             reject(
               new Error(
-                "FACE_DETECTION_INVALID_STRUCTURE",
+                "REFRAME_TRACK_INVALID_STRUCTURE",
               ),
             );
 
             return;
           }
 
-          resolve(parsed);
+          resolve(
+            parsed,
+          );
         },
       );
     },

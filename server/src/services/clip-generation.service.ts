@@ -16,6 +16,8 @@ import type { Transcript } from "../types/transcript.js";
 
 import { generateVerticalClip } from "./ffmpeg.service.js";
 
+import { detectReframeTrack } from "./reframe.service.js";
+
 import { createAssSubtitlesForClip } from "./subtitle.service.js";
 
 interface GenerateShortsResult {
@@ -37,7 +39,9 @@ export async function generateShorts(
   transcript: Transcript,
   jobId: string,
 ): Promise<GenerateShortsResult> {
-  if (clips.length === 0) {
+  if (
+    clips.length === 0
+  ) {
     throw new Error(
       "NO_CLIPS_TO_GENERATE",
     );
@@ -74,7 +78,9 @@ export async function generateShorts(
     }
 
     const shortId =
-      createShortId(index);
+      createShortId(
+        index,
+      );
 
     console.log(
       `Generating ${shortId}: ${clip.start}s → ${clip.end}s`,
@@ -82,7 +88,37 @@ export async function generateShorts(
 
     /*
      * STEP 1
-     * Create subtitles for this clip.
+     *
+     * Detect face trajectory.
+     */
+    const reframeTrack =
+      await detectReframeTrack({
+        videoPath,
+
+        start:
+          clip.start,
+
+        end:
+          clip.end,
+
+        interval:
+          0.75,
+      });
+
+    console.log(
+      [
+        `${shortId} tracking:`,
+        `strategy=${reframeTrack.strategy}`,
+        `detections=${reframeTrack.detectionCount}/${reframeTrack.sampleCount}`,
+        `accepted=${reframeTrack.acceptedCount}`,
+        `points=${reframeTrack.points.length}`,
+      ].join(" "),
+    );
+
+    /*
+     * STEP 2
+     *
+     * Build subtitles.
      */
     const subtitleResult =
       await createAssSubtitlesForClip(
@@ -101,9 +137,10 @@ export async function generateShorts(
       );
 
     /*
-     * STEP 2
-     * Generate vertical video
-     * and burn subtitles into it.
+     * STEP 3
+     *
+     * Render dynamic crop +
+     * subtitles.
      */
     await generateVerticalClip({
       videoPath,
@@ -117,17 +154,21 @@ export async function generateShorts(
       end:
         clip.end,
 
+      reframeTrack,
+
       subtitlePath:
         subtitleResult
           .subtitlePath,
     });
 
     /*
-     * STEP 3
-     * Store metadata for the generated short.
+     * STEP 4
+     *
+     * Store generated Short metadata.
      */
     generatedShorts.push({
-      id: shortId,
+      id:
+        shortId,
 
       start:
         clip.start,
@@ -162,8 +203,23 @@ export async function generateShorts(
         subtitleResult
           .cueCount,
 
-      width: 1080,
-      height: 1920,
+      width:
+        1080,
+
+      height:
+        1920,
+
+      reframeStrategy:
+        reframeTrack
+          .strategy,
+
+      reframeDetectionRate:
+        reframeTrack
+          .detectionRate,
+
+      reframePointCount:
+        reframeTrack
+          .points.length,
     });
   }
 

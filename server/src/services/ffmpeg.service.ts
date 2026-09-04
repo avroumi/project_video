@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
+import type { ReframeTrack } from "../types/reframe-focus.js";
 import type { VideoMetadata } from "../types/video-metadata.js";
 
 interface FfprobeStream {
@@ -33,6 +34,8 @@ interface GenerateVerticalClipInput {
 
   start: number;
   end: number;
+
+  reframeTrack: ReframeTrack;
 
   subtitlePath?: string;
 }
@@ -120,6 +123,187 @@ function escapeFfmpegFilterPath(
       "'",
       "\\'",
     );
+}
+
+/*
+ * A comma has a special meaning inside
+ * a FFmpeg filter graph.
+ *
+ * Our mathematical expressions contain
+ * functions such as:
+ *
+ * if(...)
+ * min(...)
+ * max(...)
+ *
+ * so their commas must be escaped.
+ */
+function escapeFfmpegExpression(
+  value: string,
+): string {
+  return value.replaceAll(
+    ",",
+    "\\,",
+  );
+}
+
+function formatExpressionNumber(
+  value: number,
+): string {
+  return value.toFixed(6);
+}
+
+/*
+ * Convert:
+ *
+ * [
+ *   { time: 0, focusX: 0.37 },
+ *   { time: 1, focusX: 0.40 },
+ *   { time: 2, focusX: 0.50 }
+ * ]
+ *
+ * into a FFmpeg expression based on t.
+ *
+ * Between two points we use linear
+ * interpolation, so the crop moves
+ * progressively instead of jumping.
+ */
+function buildFocusXExpression(
+  track: ReframeTrack,
+): string {
+  if (
+    track.strategy === "center" ||
+    track.points.length < 2
+  ) {
+    return "0.5";
+  }
+
+  const points =
+    track.points;
+
+  const lastPoint =
+    points[
+      points.length - 1
+    ];
+
+  if (!lastPoint) {
+    return "0.5";
+  }
+
+  let expression =
+    formatExpressionNumber(
+      lastPoint.focusX,
+    );
+
+  /*
+   * We build nested if() expressions
+   * backwards.
+   */
+  for (
+    let index =
+      points.length - 2;
+    index >= 0;
+    index -= 1
+  ) {
+    const current =
+      points[index];
+
+    const next =
+      points[index + 1];
+
+    if (
+      !current ||
+      !next
+    ) {
+      continue;
+    }
+
+    const segmentDuration =
+      Math.max(
+        next.time -
+          current.time,
+        0.001,
+      );
+
+    const currentTime =
+      formatExpressionNumber(
+        current.time,
+      );
+
+    const nextTime =
+      formatExpressionNumber(
+        next.time,
+      );
+
+    const currentX =
+      formatExpressionNumber(
+        current.focusX,
+      );
+
+    const nextX =
+      formatExpressionNumber(
+        next.focusX,
+      );
+
+    const duration =
+      formatExpressionNumber(
+        segmentDuration,
+      );
+
+    /*
+     * Linear interpolation:
+     *
+     * x1 + (x2-x1) * (t-t1)/(t2-t1)
+     */
+    const interpolation =
+      `${currentX}` +
+      `+(${nextX}-${currentX})` +
+      `*(t-${currentTime})` +
+      `/${duration}`;
+
+    expression =
+      `if(` +
+      `lt(t,${nextTime}),` +
+      `${interpolation},` +
+      `${expression}` +
+      `)`;
+  }
+
+  return expression;
+}
+
+function buildCropXExpression(
+  track: ReframeTrack,
+): string {
+  const focusExpression =
+    buildFocusXExpression(
+      track,
+    );
+
+  /*
+   * focusX represents the desired
+   * center of the crop.
+   *
+   * Example:
+   *
+   * focusX = 0.5
+   * → center of source
+   *
+   * focusX = 0.7
+   * → 70% across source width
+   *
+   * max/min prevent the crop from
+   * leaving the source image.
+   */
+  return (
+    "max(" +
+    "0," +
+    "min(" +
+    "iw-ow," +
+    `(${focusExpression})*iw-ow/2` +
+    ")" +
+    ")"
+  );
 }
 
 export async function probeVideo(
@@ -479,6 +663,7 @@ export async function generateVerticalClip(
     outputPath,
     start,
     end,
+    reframeTrack,
     subtitlePath,
   } = input;
 
@@ -520,27 +705,71 @@ export async function generateVerticalClip(
     },
   );
 
-  /*
-   * V1 framing:
-   *
-   * - preserve aspect ratio
-   * - fill a 1080x1920 canvas
-   * - crop the center
-   *
-   * Smart reframe is intentionally
-   * disabled for now.
-   */
-  const videoFilters = [
-    "scale=1080:1920:force_original_aspect_ratio=increase",
-    "crop=1080:1920:(iw-1080)/2:(ih-1920)/2",
-    "setsar=1",
-    "setpts=PTS-STARTPTS",
-  ];
+  const cropXExpression =
+    buildCropXExpression(
+      reframeTrack,
+    );
+
+  const escapedCropXExpression =
+    escapeFfmpegExpression(
+      cropXExpression,
+    );
 
   /*
-   * Burn ASS subtitles
-   * directly into the video.
+   * We intentionally keep the full
+   * source height.
+   *
+   * No 1.35x zoom anymore.
+   *
+   * The vertical crop width is derived
+   * from the source height.
    */
+  const cropWidthExpression =
+    escapeFfmpegExpression(
+      "min(iw,ceil(ih*9/16/2)*2)",
+    );
+
+  console.log(
+    [
+      "Dynamic reframe:",
+      `strategy=${reframeTrack.strategy}`,
+      `rate=${(
+        reframeTrack.detectionRate *
+        100
+      ).toFixed(1)}%`,
+      `points=${reframeTrack.points.length}`,
+    ].join(" "),
+  );
+
+  const videoFilters = [
+    /*
+     * Critical:
+     *
+     * t must start at 0 for our ReframeTrack
+     * because its timestamps are relative
+     * to the beginning of the Short.
+     */
+    "setpts=PTS-STARTPTS",
+
+    /*
+     * x is evaluated for every frame.
+     */
+    (
+      `crop=` +
+      `w=${cropWidthExpression}:` +
+      `h=ih:` +
+      `x=${escapedCropXExpression}:` +
+      `y=0`
+    ),
+
+    /*
+     * Final Shorts resolution.
+     */
+    "scale=1080:1920",
+
+    "setsar=1",
+  ];
+
   if (
     subtitlePath
   ) {
