@@ -32,9 +32,6 @@ export async function downloadYouTubeVideo(
     "--js-runtimes",
     "node",
 
-    "--format",
-    "b[ext=mp4]/b",
-
     "--output",
     outputTemplate,
 
@@ -72,61 +69,70 @@ export async function downloadYouTubeVideo(
       },
     );
 
-    childProcess.on("error", (error) => {
-      reject(
-        new Error(
-          `Unable to start yt-dlp: ${error.message}`,
-        ),
-      );
-    });
-
-    childProcess.on("close", (exitCode) => {
-      if (exitCode !== 0) {
+    childProcess.on(
+      "error",
+      (error) => {
         reject(
           new Error(
-            stderr.trim() ||
-              `yt-dlp exited with code ${exitCode}`,
+            `Unable to start yt-dlp: ${error.message}`,
           ),
         );
+      },
+    );
 
-        return;
-      }
+    childProcess.on(
+      "close",
+      (exitCode) => {
+        if (exitCode !== 0) {
+          reject(
+            new Error(
+              stderr.trim() ||
+                `yt-dlp exited with code ${exitCode}`,
+            ),
+          );
 
-      const outputLines = stdout
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
+          return;
+        }
 
-      const filepathLine = outputLines.find(
-        (line) =>
-          line.startsWith("__FILEPATH__"),
-      );
+        const outputLines = stdout
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
 
-      if (!filepathLine) {
-        reject(
-          new Error(
-            "yt-dlp completed but no video path was returned.",
-          ),
-        );
+        const filepathLine =
+          outputLines.find((line) =>
+            line.startsWith(
+              "__FILEPATH__",
+            ),
+          );
 
-        return;
-      }
+        if (!filepathLine) {
+          reject(
+            new Error(
+              "yt-dlp completed but no video path was returned.",
+            ),
+          );
 
-      const absoluteVideoPath =
-        filepathLine.replace(
-          "__FILEPATH__",
-          "",
-        );
+          return;
+        }
 
-      const relativeVideoPath =
-        path.relative(
-          process.cwd(),
-          absoluteVideoPath,
-        );
+        const absoluteVideoPath =
+          filepathLine.replace(
+            "__FILEPATH__",
+            "",
+          );
 
-      resolve({
-        videoPath: relativeVideoPath,
-      });
-    });
+        const relativeVideoPath =
+          path.relative(
+            process.cwd(),
+            absoluteVideoPath,
+          );
+
+        resolve({
+          videoPath:
+            relativeVideoPath,
+        });
+      },
+    );
   });
 }
