@@ -64,9 +64,20 @@ export function getProcessingJob(
 
 interface UpdateProcessingJobInput {
   status?: ProcessingStatus;
+
   videoPath?: string;
   audioPath?: string;
+
   metadata?: VideoMetadata;
+
+  transcriptPath?: string;
+
+  transcriptLanguage?: string;
+  transcriptDurationSeconds?: number;
+
+  transcriptSegmentCount?: number;
+  transcriptWordCount?: number;
+
   error?: string;
 }
 

@@ -8,6 +8,8 @@ import {
   probeVideo,
 } from "./ffmpeg.service.js";
 
+import { transcribeAudio } from "./transcription.service.js";
+
 import { downloadYouTubeVideo } from "./ytdlp.service.js";
 
 export async function startVideoProcessing(
@@ -41,7 +43,7 @@ export async function startVideoProcessing(
 
     /*
      * STEP 2
-     * Read video metadata
+     * Read metadata
      */
 
     updateProcessingJob(
@@ -80,10 +82,6 @@ export async function startVideoProcessing(
         job.id,
       );
 
-    /*
-     * Pipeline currently finished here
-     */
-
     updateProcessingJob(
       jobId,
       {
@@ -91,6 +89,59 @@ export async function startVideoProcessing(
 
         audioPath:
           audioResult.audioPath,
+      },
+    );
+
+    /*
+     * STEP 4
+     * Transcription
+     */
+
+    updateProcessingJob(
+      jobId,
+      {
+        status: "transcribing",
+      },
+    );
+
+    const transcriptionResult =
+      await transcribeAudio(
+        audioResult.audioPath,
+        job.id,
+      );
+
+    /*
+     * Current end of pipeline
+     */
+
+    updateProcessingJob(
+      jobId,
+      {
+        status:
+          "transcript_ready",
+
+        transcriptPath:
+          transcriptionResult
+            .transcriptPath,
+
+        transcriptLanguage:
+          transcriptionResult
+            .transcript.language,
+
+        transcriptDurationSeconds:
+          transcriptionResult
+            .transcript
+            .durationSeconds,
+
+        transcriptSegmentCount:
+          transcriptionResult
+            .transcript
+            .segments.length,
+
+        transcriptWordCount:
+          transcriptionResult
+            .transcript
+            .words.length,
       },
     );
   } catch (error) {

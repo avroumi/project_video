@@ -6,6 +6,8 @@ export type ProcessingStatus =
   | "probing"
   | "extracting_audio"
   | "audio_ready"
+  | "transcribing"
+  | "transcript_ready"
   | "failed";
 
 export interface ProcessingJob {
@@ -20,6 +22,14 @@ export interface ProcessingJob {
   audioPath?: string;
 
   metadata?: VideoMetadata;
+
+  transcriptPath?: string;
+
+  transcriptLanguage?: string;
+  transcriptDurationSeconds?: number;
+
+  transcriptSegmentCount?: number;
+  transcriptWordCount?: number;
 
   error?: string;
 }
