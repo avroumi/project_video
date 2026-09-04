@@ -12,7 +12,11 @@ import type {
   GeneratedShortManifest,
 } from "../types/generated-short.js";
 
+import type { Transcript } from "../types/transcript.js";
+
 import { generateVerticalClip } from "./ffmpeg.service.js";
+
+import { createAssSubtitlesForClip } from "./subtitle.service.js";
 
 interface GenerateShortsResult {
   shorts: GeneratedShort[];
@@ -30,6 +34,7 @@ function createShortId(
 export async function generateShorts(
   videoPath: string,
   clips: ClipCandidate[],
+  transcript: Transcript,
   jobId: string,
 ): Promise<GenerateShortsResult> {
   if (clips.length === 0) {
@@ -56,18 +61,13 @@ export async function generateShorts(
   const generatedShorts:
     GeneratedShort[] = [];
 
-  /*
-   * Generate sequentially.
-   *
-   * We intentionally do NOT render all clips
-   * simultaneously because FFmpeg is CPU-heavy.
-   */
   for (
     let index = 0;
     index < clips.length;
     index += 1
   ) {
-    const clip = clips[index];
+    const clip =
+      clips[index];
 
     if (!clip) {
       continue;
@@ -75,6 +75,22 @@ export async function generateShorts(
 
     const shortId =
       createShortId(index);
+
+    console.log(
+      `Generating ${shortId}: ${clip.start}s → ${clip.end}s`,
+    );
+
+    /*
+     * STEP 1
+     * Create subtitles for this clip.
+     */
+    const subtitleResult =
+      await createAssSubtitlesForClip(
+        transcript,
+        clip,
+        jobId,
+        shortId,
+      );
 
     const relativeVideoPath =
       path.join(
@@ -84,46 +100,71 @@ export async function generateShorts(
         `${shortId}.mp4`,
       );
 
-    console.log(
-      `Generating ${shortId}: ${clip.start}s → ${clip.end}s`,
-    );
-
+    /*
+     * STEP 2
+     * Generate vertical video
+     * and burn subtitles into it.
+     */
     await generateVerticalClip({
       videoPath,
 
       outputPath:
         relativeVideoPath,
 
-      start: clip.start,
-      end: clip.end,
+      start:
+        clip.start,
+
+      end:
+        clip.end,
+
+      subtitlePath:
+        subtitleResult
+          .subtitlePath,
     });
 
-    const generatedShort:
-      GeneratedShort = {
-        id: shortId,
+    /*
+     * STEP 3
+     * Store metadata for the generated short.
+     */
+    generatedShorts.push({
+      id: shortId,
 
-        start: clip.start,
-        end: clip.end,
+      start:
+        clip.start,
 
-        durationSeconds:
-          clip.end -
-          clip.start,
+      end:
+        clip.end,
 
-        title: clip.title,
-        hook: clip.hook,
-        score: clip.score,
-        reason: clip.reason,
+      durationSeconds:
+        clip.end -
+        clip.start,
 
-        videoPath:
-          relativeVideoPath,
+      title:
+        clip.title,
 
-        width: 1080,
-        height: 1920,
-      };
+      hook:
+        clip.hook,
 
-    generatedShorts.push(
-      generatedShort,
-    );
+      score:
+        clip.score,
+
+      reason:
+        clip.reason,
+
+      videoPath:
+        relativeVideoPath,
+
+      subtitlePath:
+        subtitleResult
+          .subtitlePath,
+
+      subtitleCueCount:
+        subtitleResult
+          .cueCount,
+
+      width: 1080,
+      height: 1920,
+    });
   }
 
   const manifest:
@@ -150,17 +191,14 @@ export async function generateShorts(
     "utf8",
   );
 
-  const relativeManifestPath =
-    path.relative(
-      process.cwd(),
-      absoluteManifestPath,
-    );
-
   return {
     shorts:
       generatedShorts,
 
     manifestPath:
-      relativeManifestPath,
+      path.relative(
+        process.cwd(),
+        absoluteManifestPath,
+      ),
   };
 }

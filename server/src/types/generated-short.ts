@@ -7,10 +7,14 @@ export interface GeneratedShort {
 
   title: string;
   hook: string;
+
   score: number;
   reason: string;
 
   videoPath: string;
+
+  subtitlePath: string;
+  subtitleCueCount: number;
 
   width: number;
   height: number;

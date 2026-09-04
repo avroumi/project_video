@@ -27,6 +27,16 @@ interface ExtractAudioResult {
   audioPath: string;
 }
 
+interface GenerateVerticalClipInput {
+  videoPath: string;
+  outputPath: string;
+
+  start: number;
+  end: number;
+
+  subtitlePath?: string;
+}
+
 function isObject(
   value: unknown,
 ): value is Record<string, unknown> {
@@ -69,8 +79,10 @@ function parseFrameRate(
     return 0;
   }
 
-  const [numeratorText, denominatorText] =
-    value.split("/");
+  const [
+    numeratorText,
+    denominatorText,
+  ] = value.split("/");
 
   const numerator =
     Number(numeratorText);
@@ -86,7 +98,28 @@ function parseFrameRate(
     return 0;
   }
 
-  return numerator / denominator;
+  return (
+    numerator /
+    denominator
+  );
+}
+
+function escapeFfmpegFilterPath(
+  value: string,
+): string {
+  return value
+    .replaceAll(
+      "\\",
+      "\\\\",
+    )
+    .replaceAll(
+      ":",
+      "\\:",
+    )
+    .replaceAll(
+      "'",
+      "\\'",
+    );
 }
 
 export async function probeVideo(
@@ -112,35 +145,47 @@ export async function probeVideo(
   ];
 
   return new Promise(
-    (resolve, reject) => {
-      const childProcess = spawn(
-        "ffprobe",
-        args,
-        {
-          shell: false,
-        },
-      );
+    (
+      resolve,
+      reject,
+    ) => {
+      const childProcess =
+        spawn(
+          "ffprobe",
+          args,
+          {
+            shell: false,
+          },
+        );
 
       let stdout = "";
       let stderr = "";
 
       childProcess.stdout.on(
         "data",
-        (data: Buffer) => {
-          stdout += data.toString();
+        (
+          data: Buffer,
+        ) => {
+          stdout +=
+            data.toString();
         },
       );
 
       childProcess.stderr.on(
         "data",
-        (data: Buffer) => {
-          stderr += data.toString();
+        (
+          data: Buffer,
+        ) => {
+          stderr +=
+            data.toString();
         },
       );
 
       childProcess.on(
         "error",
-        (error) => {
+        (
+          error,
+        ) => {
           reject(
             new Error(
               `Unable to start ffprobe: ${error.message}`,
@@ -151,8 +196,12 @@ export async function probeVideo(
 
       childProcess.on(
         "close",
-        (exitCode) => {
-          if (exitCode !== 0) {
+        (
+          exitCode,
+        ) => {
+          if (
+            exitCode !== 0
+          ) {
             reject(
               new Error(
                 stderr.trim() ||
@@ -165,10 +214,14 @@ export async function probeVideo(
 
           try {
             const parsed: unknown =
-              JSON.parse(stdout);
+              JSON.parse(
+                stdout,
+              );
 
             if (
-              !isFfprobeOutput(parsed)
+              !isFfprobeOutput(
+                parsed,
+              )
             ) {
               throw new Error(
                 "Invalid ffprobe response.",
@@ -177,19 +230,25 @@ export async function probeVideo(
 
             const videoStream =
               parsed.streams?.find(
-                (stream) =>
+                (
+                  stream,
+                ) =>
                   stream.codec_type ===
                   "video",
               );
 
             const audioStream =
               parsed.streams?.find(
-                (stream) =>
+                (
+                  stream,
+                ) =>
                   stream.codec_type ===
                   "audio",
               );
 
-            if (!videoStream) {
+            if (
+              !videoStream
+            ) {
               throw new Error(
                 "No video stream found.",
               );
@@ -197,7 +256,8 @@ export async function probeVideo(
 
             const durationSeconds =
               Number(
-                parsed.format?.duration,
+                parsed.format
+                  ?.duration,
               );
 
             if (
@@ -213,52 +273,69 @@ export async function probeVideo(
             const fileSize =
               parsed.format?.size
                 ? Number(
-                    parsed.format.size,
+                    parsed.format
+                      .size,
                   )
                 : undefined;
 
-            const metadata: VideoMetadata =
-              {
+            const metadata:
+              VideoMetadata = {
                 durationSeconds,
 
                 width:
-                  videoStream.width ?? 0,
+                  videoStream
+                    .width ?? 0,
 
                 height:
-                  videoStream.height ?? 0,
+                  videoStream
+                    .height ?? 0,
 
-                fps: parseFrameRate(
-                  videoStream.avg_frame_rate,
-                ),
+                fps:
+                  parseFrameRate(
+                    videoStream
+                      .avg_frame_rate,
+                  ),
 
                 formatName:
                   parsed.format
                     ?.format_name,
 
                 videoCodec:
-                  videoStream.codec_name,
+                  videoStream
+                    .codec_name,
 
                 audioCodec:
-                  audioStream?.codec_name,
+                  audioStream
+                    ?.codec_name,
               };
 
             if (
-              fileSize !== undefined &&
-              Number.isFinite(fileSize)
+              fileSize !==
+                undefined &&
+              Number.isFinite(
+                fileSize,
+              )
             ) {
               metadata.fileSizeBytes =
                 fileSize;
             }
 
-            resolve(metadata);
-          } catch (error) {
+            resolve(
+              metadata,
+            );
+          } catch (
+            error
+          ) {
             const message =
-              error instanceof Error
+              error instanceof
+              Error
                 ? error.message
                 : "Unable to parse ffprobe output.";
 
             reject(
-              new Error(message),
+              new Error(
+                message,
+              ),
             );
           }
         },
@@ -322,27 +399,36 @@ export async function extractAudio(
   ];
 
   return new Promise(
-    (resolve, reject) => {
-      const childProcess = spawn(
-        "ffmpeg",
-        args,
-        {
-          shell: false,
-        },
-      );
+    (
+      resolve,
+      reject,
+    ) => {
+      const childProcess =
+        spawn(
+          "ffmpeg",
+          args,
+          {
+            shell: false,
+          },
+        );
 
       let stderr = "";
 
       childProcess.stderr.on(
         "data",
-        (data: Buffer) => {
-          stderr += data.toString();
+        (
+          data: Buffer,
+        ) => {
+          stderr +=
+            data.toString();
         },
       );
 
       childProcess.on(
         "error",
-        (error) => {
+        (
+          error,
+        ) => {
           reject(
             new Error(
               `Unable to start FFmpeg: ${error.message}`,
@@ -353,8 +439,12 @@ export async function extractAudio(
 
       childProcess.on(
         "close",
-        (exitCode) => {
-          if (exitCode !== 0) {
+        (
+          exitCode,
+        ) => {
+          if (
+            exitCode !== 0
+          ) {
             reject(
               new Error(
                 stderr.trim() ||
@@ -381,14 +471,6 @@ export async function extractAudio(
   );
 }
 
-interface GenerateVerticalClipInput {
-  videoPath: string;
-  outputPath: string;
-
-  start: number;
-  end: number;
-}
-
 export async function generateVerticalClip(
   input: GenerateVerticalClipInput,
 ): Promise<void> {
@@ -397,6 +479,7 @@ export async function generateVerticalClip(
     outputPath,
     start,
     end,
+    subtitlePath,
   } = input;
 
   if (start < 0) {
@@ -405,7 +488,9 @@ export async function generateVerticalClip(
     );
   }
 
-  if (end <= start) {
+  if (
+    end <= start
+  ) {
     throw new Error(
       "CLIP_END_INVALID",
     );
@@ -426,67 +511,76 @@ export async function generateVerticalClip(
       outputPath,
     );
 
-  const outputDirectory =
+  await mkdir(
     path.dirname(
       absoluteOutputPath,
-    );
-
-  await mkdir(
-    outputDirectory,
+    ),
     {
       recursive: true,
     },
   );
 
-  const verticalFilter = [
+  /*
+   * V1 framing:
+   *
+   * - preserve aspect ratio
+   * - fill a 1080x1920 canvas
+   * - crop the center
+   *
+   * Smart reframe is intentionally
+   * disabled for now.
+   */
+  const videoFilters = [
     "scale=1080:1920:force_original_aspect_ratio=increase",
     "crop=1080:1920:(iw-1080)/2:(ih-1920)/2",
     "setsar=1",
-  ].join(",");
+    "setpts=PTS-STARTPTS",
+  ];
+
+  /*
+   * Burn ASS subtitles
+   * directly into the video.
+   */
+  if (
+    subtitlePath
+  ) {
+    const absoluteSubtitlePath =
+      path.resolve(
+        process.cwd(),
+        subtitlePath,
+      );
+
+    const escapedSubtitlePath =
+      escapeFfmpegFilterPath(
+        absoluteSubtitlePath,
+      );
+
+    videoFilters.push(
+      `ass=filename='${escapedSubtitlePath}'`,
+    );
+  }
 
   const args = [
     "-y",
 
-    /*
-     * Seek to clip start.
-     */
     "-ss",
     start.toFixed(3),
 
-    /*
-     * Input video.
-     */
     "-i",
     absoluteVideoPath,
 
-    /*
-     * Duration of output clip.
-     */
     "-t",
     duration.toFixed(3),
 
-    /*
-     * First video stream.
-     */
     "-map",
     "0:v:0",
 
-    /*
-     * First audio stream.
-     * The ? means audio is optional.
-     */
     "-map",
     "0:a:0?",
 
-    /*
-     * Vertical 9:16 conversion.
-     */
     "-vf",
-    verticalFilter,
+    videoFilters.join(","),
 
-    /*
-     * Video encoder.
-     */
     "-c:v",
     "libx264",
 
@@ -496,30 +590,18 @@ export async function generateVerticalClip(
     "-crf",
     "21",
 
-    /*
-     * Broad compatibility.
-     */
     "-pix_fmt",
     "yuv420p",
 
-    /*
-     * Audio.
-     */
     "-c:a",
     "aac",
 
     "-b:a",
     "128k",
 
-    /*
-     * Better playback when streamed.
-     */
     "-movflags",
     "+faststart",
 
-    /*
-     * Normalize timestamps.
-     */
     "-avoid_negative_ts",
     "make_zero",
 
@@ -527,7 +609,10 @@ export async function generateVerticalClip(
   ];
 
   await new Promise<void>(
-    (resolve, reject) => {
+    (
+      resolve,
+      reject,
+    ) => {
       const childProcess =
         spawn(
           "ffmpeg",
@@ -541,7 +626,9 @@ export async function generateVerticalClip(
 
       childProcess.stderr.on(
         "data",
-        (data: Buffer) => {
+        (
+          data: Buffer,
+        ) => {
           stderr +=
             data.toString();
         },
@@ -549,7 +636,9 @@ export async function generateVerticalClip(
 
       childProcess.on(
         "error",
-        (error) => {
+        (
+          error,
+        ) => {
           reject(
             new Error(
               `Unable to start FFmpeg: ${error.message}`,
@@ -560,8 +649,12 @@ export async function generateVerticalClip(
 
       childProcess.on(
         "close",
-        (exitCode) => {
-          if (exitCode !== 0) {
+        (
+          exitCode,
+        ) => {
+          if (
+            exitCode !== 0
+          ) {
             reject(
               new Error(
                 stderr.trim() ||

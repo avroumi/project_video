@@ -202,9 +202,10 @@ const generationResult =
 
     analysisResult.clips,
 
+    transcriptionResult.transcript,
+
     job.id,
   );
-
 /*
  * Current end of pipeline
  */
