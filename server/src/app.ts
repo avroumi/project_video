@@ -1,8 +1,8 @@
 import express from "express";
 import cors from "cors";
 
-import { healthRouter } from "./routes/health.routes";
-import { videoRouter } from "./routes/video.routes";
+import { healthRouter } from "./routes/health.routes.js";
+import { videoRouter } from "./routes/video.routes.js";
 
 export const app = express();
 
