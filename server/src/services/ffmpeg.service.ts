@@ -380,3 +380,201 @@ export async function extractAudio(
     },
   );
 }
+
+interface GenerateVerticalClipInput {
+  videoPath: string;
+  outputPath: string;
+
+  start: number;
+  end: number;
+}
+
+export async function generateVerticalClip(
+  input: GenerateVerticalClipInput,
+): Promise<void> {
+  const {
+    videoPath,
+    outputPath,
+    start,
+    end,
+  } = input;
+
+  if (start < 0) {
+    throw new Error(
+      "CLIP_START_INVALID",
+    );
+  }
+
+  if (end <= start) {
+    throw new Error(
+      "CLIP_END_INVALID",
+    );
+  }
+
+  const duration =
+    end - start;
+
+  const absoluteVideoPath =
+    path.resolve(
+      process.cwd(),
+      videoPath,
+    );
+
+  const absoluteOutputPath =
+    path.resolve(
+      process.cwd(),
+      outputPath,
+    );
+
+  const outputDirectory =
+    path.dirname(
+      absoluteOutputPath,
+    );
+
+  await mkdir(
+    outputDirectory,
+    {
+      recursive: true,
+    },
+  );
+
+  const verticalFilter = [
+    "scale=1080:1920:force_original_aspect_ratio=increase",
+    "crop=1080:1920:(iw-1080)/2:(ih-1920)/2",
+    "setsar=1",
+  ].join(",");
+
+  const args = [
+    "-y",
+
+    /*
+     * Seek to clip start.
+     */
+    "-ss",
+    start.toFixed(3),
+
+    /*
+     * Input video.
+     */
+    "-i",
+    absoluteVideoPath,
+
+    /*
+     * Duration of output clip.
+     */
+    "-t",
+    duration.toFixed(3),
+
+    /*
+     * First video stream.
+     */
+    "-map",
+    "0:v:0",
+
+    /*
+     * First audio stream.
+     * The ? means audio is optional.
+     */
+    "-map",
+    "0:a:0?",
+
+    /*
+     * Vertical 9:16 conversion.
+     */
+    "-vf",
+    verticalFilter,
+
+    /*
+     * Video encoder.
+     */
+    "-c:v",
+    "libx264",
+
+    "-preset",
+    "veryfast",
+
+    "-crf",
+    "21",
+
+    /*
+     * Broad compatibility.
+     */
+    "-pix_fmt",
+    "yuv420p",
+
+    /*
+     * Audio.
+     */
+    "-c:a",
+    "aac",
+
+    "-b:a",
+    "128k",
+
+    /*
+     * Better playback when streamed.
+     */
+    "-movflags",
+    "+faststart",
+
+    /*
+     * Normalize timestamps.
+     */
+    "-avoid_negative_ts",
+    "make_zero",
+
+    absoluteOutputPath,
+  ];
+
+  await new Promise<void>(
+    (resolve, reject) => {
+      const childProcess =
+        spawn(
+          "ffmpeg",
+          args,
+          {
+            shell: false,
+          },
+        );
+
+      let stderr = "";
+
+      childProcess.stderr.on(
+        "data",
+        (data: Buffer) => {
+          stderr +=
+            data.toString();
+        },
+      );
+
+      childProcess.on(
+        "error",
+        (error) => {
+          reject(
+            new Error(
+              `Unable to start FFmpeg: ${error.message}`,
+            ),
+          );
+        },
+      );
+
+      childProcess.on(
+        "close",
+        (exitCode) => {
+          if (exitCode !== 0) {
+            reject(
+              new Error(
+                stderr.trim() ||
+                  `FFmpeg exited with code ${exitCode}`,
+              ),
+            );
+
+            return;
+          }
+
+          resolve();
+        },
+      );
+    },
+  );
+}

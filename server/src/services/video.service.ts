@@ -73,13 +73,19 @@ interface UpdateProcessingJobInput {
   transcriptPath?: string;
 
   transcriptLanguage?: string;
+
   transcriptDurationSeconds?: number;
 
   transcriptSegmentCount?: number;
   transcriptWordCount?: number;
 
   analysisPath?: string;
+
   clipCandidateCount?: number;
+
+  shortsManifestPath?: string;
+
+  generatedShortCount?: number;
 
   error?: string;
 }

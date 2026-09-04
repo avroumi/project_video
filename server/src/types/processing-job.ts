@@ -10,10 +10,13 @@ export type ProcessingStatus =
   | "transcript_ready"
   | "analyzing_clips"
   | "clips_ready"
+  | "generating_shorts"
+  | "shorts_ready"
   | "failed";
 
 export interface ProcessingJob {
   id: string;
+
   sourceUrl: string;
 
   status: ProcessingStatus;
@@ -29,13 +32,19 @@ export interface ProcessingJob {
   transcriptPath?: string;
 
   transcriptLanguage?: string;
+
   transcriptDurationSeconds?: number;
 
   transcriptSegmentCount?: number;
   transcriptWordCount?: number;
 
   analysisPath?: string;
+
   clipCandidateCount?: number;
+
+  shortsManifestPath?: string;
+
+  generatedShortCount?: number;
 
   error?: string;
 }

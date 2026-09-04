@@ -3,6 +3,8 @@ import {
   updateProcessingJob,
 } from "./video.service.js";
 
+import { generateShorts } from "./clip-generation.service.js";
+
 import {
   extractAudio,
   probeVideo,
@@ -181,6 +183,46 @@ export async function startVideoProcessing(
             .clips.length,
       },
     );
+    /*
+ * STEP 6
+ * Generate real vertical shorts
+ */
+
+updateProcessingJob(
+  jobId,
+  {
+    status:
+      "generating_shorts",
+  },
+);
+
+const generationResult =
+  await generateShorts(
+    downloadResult.videoPath,
+
+    analysisResult.clips,
+
+    job.id,
+  );
+
+/*
+ * Current end of pipeline
+ */
+
+updateProcessingJob(
+  jobId,
+  {
+    status: "shorts_ready",
+
+    shortsManifestPath:
+      generationResult
+        .manifestPath,
+
+    generatedShortCount:
+      generationResult
+        .shorts.length,
+  },
+);
   } catch (error) {
     const message =
       error instanceof Error
