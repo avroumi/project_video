@@ -6,6 +6,7 @@ import {
   getShortManifest,
   getShortVideoPath,
 } from "../services/short.service.js";
+import { generateYouTubeMetadata } from "../services/youtube-metadata.service.js";
 
 import {
   createProcessingJob,
@@ -240,6 +241,81 @@ export async function streamShortVideo(
     res.status(500).json({
       error:
         "UNABLE_TO_STREAM_SHORT",
+    });
+  }
+}export async function createShortMetadata(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const {
+    jobId,
+    shortId,
+  } = req.params;
+
+  if (
+    typeof jobId !== "string" ||
+    typeof shortId !== "string"
+  ) {
+    res.status(400).json({
+      error:
+        "JOB_ID_AND_SHORT_ID_REQUIRED",
+    });
+
+    return;
+  }
+
+  try {
+    const result =
+      await generateYouTubeMetadata(
+        jobId,
+        shortId,
+      );
+
+    res.json(result);
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "UNKNOWN_ERROR";
+
+    if (
+      message ===
+        "SHORT_NOT_FOUND" ||
+      message ===
+        "SHORT_MANIFEST_NOT_FOUND" ||
+      message ===
+        "TRANSCRIPT_NOT_FOUND"
+    ) {
+      res.status(404).json({
+        error: message,
+      });
+
+      return;
+    }
+
+    if (
+      message ===
+        "INVALID_JOB_ID" ||
+      message ===
+        "INVALID_SHORT_ID" ||
+      message ===
+        "SHORT_TRANSCRIPT_EMPTY"
+    ) {
+      res.status(400).json({
+        error: message,
+      });
+
+      return;
+    }
+
+    console.error(
+      "Unable to generate YouTube metadata:",
+      error,
+    );
+
+    res.status(500).json({
+      error:
+        "UNABLE_TO_GENERATE_METADATA",
     });
   }
 }

@@ -5,6 +5,7 @@ import {
   getVideoJobController,
   getVideoShorts,
 streamShortVideo,
+createShortMetadata,
 } from "../controllers/video.controller.js";
 
 export const videoRouter = Router();
@@ -26,4 +27,8 @@ videoRouter.get(
 videoRouter.get(
   "/:jobId/shorts/:shortId/video",
   streamShortVideo,
+);
+videoRouter.post(
+  "/:jobId/shorts/:shortId/metadata",
+  createShortMetadata,
 );
