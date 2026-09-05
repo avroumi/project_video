@@ -1,10 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 
+import { ShortCard } from "./components/ShortCard";
+
 import {
   createVideoJob,
   getVideoJob,
   getVideoShorts,
 } from "./services/video-api";
+
 import type { GeneratedShort } from "./types/generated-short";
 import type { ProcessingJob } from "./types/processing-job";
 
@@ -12,11 +15,20 @@ function App() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
 
   const [job, setJob] = useState<ProcessingJob | null>(null);
+
   const [shorts, setShorts] = useState<GeneratedShort[]>([]);
-  const [isLoadingShorts, setIsLoadingShorts] = useState(false);
+
+  const [selectedShortId, setSelectedShortId] = useState<string | null>(null);
+
   const [isLoading, setIsLoading] = useState(false);
 
+  const [isLoadingShorts, setIsLoadingShorts] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
+
+  const selectedShort =
+    shorts.find((short) => short.id === selectedShortId) ?? null;
+
   useEffect(() => {
     if (!job) {
       return;
@@ -40,6 +52,7 @@ function App() {
       window.clearInterval(intervalId);
     };
   }, [job?.id, job?.status]);
+
   useEffect(() => {
     if (!job || job.status !== "shorts_ready") {
       return;
@@ -79,9 +92,9 @@ function App() {
       setIsLoading(true);
 
       setError(null);
-
       setJob(null);
       setShorts([]);
+      setSelectedShortId(null);
 
       const createdJob = await createVideoJob(cleanUrl);
 
@@ -122,39 +135,55 @@ function App() {
 
       {job && (
         <section>
-          <h2>Processing started</h2>
+          <h2>Processing</h2>
 
           <p>Job ID: {job.id}</p>
 
           <p>Status: {job.status}</p>
+
           {job.status === "shorts_ready" && <p>Shorts are ready!</p>}
 
           {job.status === "failed" && (
             <p>Processing failed: {job.error ?? "Unknown error"}</p>
           )}
-          {isLoadingShorts && <p>Loading generated shorts...</p>}
+        </section>
+      )}
 
-          {shorts.length > 0 && (
-            <section>
-              <h2>Generated Shorts</h2>
+      {isLoadingShorts && <p>Loading generated shorts...</p>}
 
-              {shorts.map((short) => (
-                <article key={short.id}>
-                  <h3>{short.title}</h3>
+      {shorts.length > 0 && (
+        <section>
+          <h2>Generated Shorts</h2>
 
-                  <video src={short.videoUrl} controls width="300" />
+          {shorts.map((short) => (
+            <ShortCard
+              key={short.id}
+              short={short}
+              isSelected={short.id === selectedShortId}
+              onSelect={setSelectedShortId}
+            />
+          ))}
+        </section>
+      )}
 
-                  <p>{short.hook}</p>
+      {selectedShort && (
+        <section>
+          <h2>Selected Short</h2>
 
-                  <p>Score: {short.score}/10</p>
+          <p>{selectedShort.title}</p>
 
-                  <p>Duration: {short.durationSeconds.toFixed(1)}s</p>
+          <p>ID: {selectedShort.id}</p>
 
-                  <p>{short.reason}</p>
-                </article>
-              ))}
-            </section>
-          )}
+          <p>Score: {selectedShort.score}/10</p>
+
+          <button
+            type="button"
+            onClick={() => {
+              console.log("Selected short:", selectedShort);
+            }}
+          >
+            Continue with this Short
+          </button>
         </section>
       )}
     </main>
