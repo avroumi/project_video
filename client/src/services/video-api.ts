@@ -1,5 +1,10 @@
 import type { ProcessingJob } from "../types/processing-job";
 import type { GeneratedShort } from "../types/generated-short";
+import type {
+  YouTubeMetadataResult,
+} from "../types/youtube-metadata";
+
+
 const API_URL =
   import.meta.env.VITE_API_URL ??
   "http://localhost:3000";
@@ -97,4 +102,23 @@ export async function getVideoShorts(
         `${API_URL}${short.videoUrl}`,
     }),
   );
+}
+export async function generateShortMetadata(
+  jobId: string,
+  shortId: string,
+): Promise<YouTubeMetadataResult> {
+  const response = await fetch(
+    `${API_URL}/api/videos/${jobId}/shorts/${shortId}/metadata`,
+    {
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Unable to generate metadata. Status: ${response.status}`,
+    );
+  }
+
+  return (await response.json()) as YouTubeMetadataResult;
 }

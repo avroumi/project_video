@@ -8,16 +8,20 @@ interface ShortCardProps {
 
 export function ShortCard({ short, isSelected, onSelect }: ShortCardProps) {
   return (
-    <article>
-      <h3>{short.title}</h3>
+    <article className={isSelected ? "short-card selected" : "short-card"}>
+      <video src={short.videoUrl} controls preload="metadata" />
 
-      <video src={short.videoUrl} controls width="300" />
+      <h3>{short.title}</h3>
 
       <p>{short.hook}</p>
 
-      <p>Score: {short.score}/10</p>
+      <p>
+        <strong>Score:</strong> {short.score}/10
+      </p>
 
-      <p>Duration: {short.durationSeconds.toFixed(1)}s</p>
+      <p>
+        <strong>Duration:</strong> {short.durationSeconds.toFixed(1)}s
+      </p>
 
       <p>{short.reason}</p>
 

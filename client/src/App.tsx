@@ -1,15 +1,19 @@
+import "./App.css";
+
 import { useEffect, useState, type FormEvent } from "react";
 
 import { ShortCard } from "./components/ShortCard";
 
 import {
   createVideoJob,
+  generateShortMetadata,
   getVideoJob,
   getVideoShorts,
 } from "./services/video-api";
 
 import type { GeneratedShort } from "./types/generated-short";
 import type { ProcessingJob } from "./types/processing-job";
+import type { YouTubeMetadata } from "./types/youtube-metadata";
 
 function App() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -23,6 +27,10 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
 
   const [isLoadingShorts, setIsLoadingShorts] = useState(false);
+
+  const [metadata, setMetadata] = useState<YouTubeMetadata | null>(null);
+
+  const [isGeneratingMetadata, setIsGeneratingMetadata] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -84,7 +92,6 @@ function App() {
 
     if (!cleanUrl) {
       setError("Enter a YouTube URL.");
-
       return;
     }
 
@@ -95,6 +102,7 @@ function App() {
       setJob(null);
       setShorts([]);
       setSelectedShortId(null);
+      setMetadata(null);
 
       const createdJob = await createVideoJob(cleanUrl);
 
@@ -112,13 +120,36 @@ function App() {
     }
   };
 
+  const handleGenerateMetadata = async () => {
+    if (!job || !selectedShort) {
+      return;
+    }
+
+    try {
+      setIsGeneratingMetadata(true);
+      setError(null);
+
+      const result = await generateShortMetadata(job.id, selectedShort.id);
+
+      setMetadata(result.metadata);
+    } catch (error) {
+      console.error("Unable to generate metadata:", error);
+
+      setError("Unable to generate YouTube metadata.");
+    } finally {
+      setIsGeneratingMetadata(false);
+    }
+  };
+
   return (
-    <main>
-      <h1>Shorts Maker</h1>
+    <main className="app">
+      <div className="hero">
+        <h1>Shorts Maker</h1>
 
-      <p>Turn a YouTube video into short-form clips.</p>
+        <p>Turn a YouTube video into short-form clips.</p>
+      </div>
 
-      <form onSubmit={handleSubmit}>
+      <form className="generate-form" onSubmit={handleSubmit}>
         <input
           type="url"
           value={youtubeUrl}
@@ -131,15 +162,17 @@ function App() {
         </button>
       </form>
 
-      {error && <p>{error}</p>}
+      {error && <p className="error-message">{error}</p>}
 
       {job && (
-        <section>
+        <section className="status-card">
           <h2>Processing</h2>
 
           <p>Job ID: {job.id}</p>
 
-          <p>Status: {job.status}</p>
+          <p>
+            Status: <span className="status-value">{job.status}</span>
+          </p>
 
           {job.status === "shorts_ready" && <p>Shorts are ready!</p>}
 
@@ -152,25 +185,27 @@ function App() {
       {isLoadingShorts && <p>Loading generated shorts...</p>}
 
       {shorts.length > 0 && (
-        <section>
-          <h2>Generated Shorts</h2>
+        <section className="shorts-section">
+          <h2 className="section-title">Generated Shorts</h2>
 
-          {shorts.map((short) => (
-            <ShortCard
-              key={short.id}
-              short={short}
-              isSelected={short.id === selectedShortId}
-              onSelect={setSelectedShortId}
-            />
-          ))}
+          <div className="shorts-grid">
+            {shorts.map((short) => (
+              <ShortCard
+                key={short.id}
+                short={short}
+                isSelected={short.id === selectedShortId}
+                onSelect={setSelectedShortId}
+              />
+            ))}
+          </div>
         </section>
       )}
 
       {selectedShort && (
-        <section>
+        <section className="selected-short">
           <h2>Selected Short</h2>
 
-          <p>{selectedShort.title}</p>
+          <h3>{selectedShort.title}</h3>
 
           <p>ID: {selectedShort.id}</p>
 
@@ -178,12 +213,64 @@ function App() {
 
           <button
             type="button"
-            onClick={() => {
-              console.log("Selected short:", selectedShort);
-            }}
+            onClick={handleGenerateMetadata}
+            disabled={isGeneratingMetadata}
           >
-            Continue with this Short
+            {isGeneratingMetadata
+              ? "Generating metadata..."
+              : metadata
+                ? "Regenerate Metadata"
+                : "Continue with this Short"}
           </button>
+        </section>
+      )}
+
+      {metadata && (
+        <section className="metadata-section">
+          <h2>YouTube Metadata</h2>
+
+          <div className="metadata-form">
+            <label>
+              Title
+              <input
+                type="text"
+                value={metadata.title}
+                onChange={(event) =>
+                  setMetadata({
+                    ...metadata,
+                    title: event.target.value,
+                  })
+                }
+              />
+            </label>
+
+            <label>
+              Description
+              <textarea
+                value={metadata.description}
+                onChange={(event) =>
+                  setMetadata({
+                    ...metadata,
+                    description: event.target.value,
+                  })
+                }
+              />
+            </label>
+
+            <label>
+              Hashtags
+              <input
+                type="text"
+                value={metadata.hashtags.join(" ")}
+                onChange={(event) =>
+                  setMetadata({
+                    ...metadata,
+                    hashtags: event.target.value.split(" ").filter(Boolean),
+                  })
+                }
+              />
+            </label>
+          </div>
         </section>
       )}
     </main>
