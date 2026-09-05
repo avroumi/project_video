@@ -6,17 +6,39 @@ import { videoRouter } from "./routes/video.routes.js";
 
 export const app = express();
 
-const clientOrigin =
-  process.env.CLIENT_ORIGIN ?? "http://localhost:5173";
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
 
 app.use(
   cors({
-    origin: clientOrigin,
+    origin(origin, callback) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin)
+      ) {
+        callback(null, true);
+        return;
+      }
+
+      callback(
+        new Error(
+          `CORS blocked origin: ${origin}`,
+        ),
+      );
+    },
   }),
 );
 
 app.use(express.json());
 
-app.use("/api/health", healthRouter);
+app.use(
+  "/api/health",
+  healthRouter,
+);
 
-app.use("/api/videos", videoRouter);
+app.use(
+  "/api/videos",
+  videoRouter,
+);
