@@ -2,6 +2,10 @@ import type {
   Request,
   Response,
 } from "express";
+import {
+  getShortManifest,
+  getShortVideoPath,
+} from "../services/short.service.js";
 
 import {
   createProcessingJob,
@@ -91,4 +95,151 @@ export function getVideoJobController(
   res.status(200).json({
     job,
   });
+}
+export async function getVideoShorts(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const { jobId } =
+    req.params;
+
+  if (
+    typeof jobId !== "string"
+  ) {
+    res.status(400).json({
+      error:
+        "JOB_ID_REQUIRED",
+    });
+
+    return;
+  }
+
+  try {
+    const manifest =
+      await getShortManifest(
+        jobId,
+      );
+
+    const shorts =
+      manifest.shorts.map(
+        (short) => ({
+          ...short,
+
+          videoUrl:
+            `/api/videos/${jobId}/shorts/${short.id}/video`,
+        }),
+      );
+
+    res.json({
+      shorts,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "UNKNOWN_ERROR";
+
+    if (
+      message ===
+      "SHORT_MANIFEST_NOT_FOUND"
+    ) {
+      res.status(404).json({
+        error: message,
+      });
+
+      return;
+    }
+
+    if (
+      message ===
+      "INVALID_JOB_ID"
+    ) {
+      res.status(400).json({
+        error: message,
+      });
+
+      return;
+    }
+
+    console.error(
+      "Unable to retrieve shorts:",
+      error,
+    );
+
+    res.status(500).json({
+      error:
+        "UNABLE_TO_RETRIEVE_SHORTS",
+    });
+  }
+}
+export async function streamShortVideo(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const {
+    jobId,
+    shortId,
+  } = req.params;
+
+  if (
+    typeof jobId !== "string" ||
+    typeof shortId !== "string"
+  ) {
+    res.status(400).json({
+      error:
+        "JOB_ID_AND_SHORT_ID_REQUIRED",
+    });
+
+    return;
+  }
+
+  try {
+    const absoluteVideoPath =
+      await getShortVideoPath(
+        jobId,
+        shortId,
+      );
+
+    res.sendFile(
+      absoluteVideoPath,
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "UNKNOWN_ERROR";
+
+    if (
+      message === "SHORT_NOT_FOUND" ||
+      message === "SHORT_VIDEO_NOT_FOUND" ||
+      message === "SHORT_MANIFEST_NOT_FOUND"
+    ) {
+      res.status(404).json({
+        error: message,
+      });
+
+      return;
+    }
+
+    if (
+      message === "INVALID_JOB_ID" ||
+      message === "INVALID_SHORT_ID"
+    ) {
+      res.status(400).json({
+        error: message,
+      });
+
+      return;
+    }
+
+    console.error(
+      "Unable to stream short:",
+      error,
+    );
+
+    res.status(500).json({
+      error:
+        "UNABLE_TO_STREAM_SHORT",
+    });
+  }
 }
