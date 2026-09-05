@@ -1,14 +1,19 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-import { createVideoJob, getVideoJob } from "./services/video-api";
-
+import {
+  createVideoJob,
+  getVideoJob,
+  getVideoShorts,
+} from "./services/video-api";
+import type { GeneratedShort } from "./types/generated-short";
 import type { ProcessingJob } from "./types/processing-job";
 
 function App() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
 
   const [job, setJob] = useState<ProcessingJob | null>(null);
-
+  const [shorts, setShorts] = useState<GeneratedShort[]>([]);
+  const [isLoadingShorts, setIsLoadingShorts] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +40,29 @@ function App() {
       window.clearInterval(intervalId);
     };
   }, [job?.id, job?.status]);
+  useEffect(() => {
+    if (!job || job.status !== "shorts_ready") {
+      return;
+    }
+
+    const loadShorts = async () => {
+      try {
+        setIsLoadingShorts(true);
+
+        const generatedShorts = await getVideoShorts(job.id);
+
+        setShorts(generatedShorts);
+      } catch (error) {
+        console.error("Unable to load shorts:", error);
+
+        setError("Unable to load generated shorts.");
+      } finally {
+        setIsLoadingShorts(false);
+      }
+    };
+
+    void loadShorts();
+  }, [job?.id, job?.status]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -53,6 +81,7 @@ function App() {
       setError(null);
 
       setJob(null);
+      setShorts([]);
 
       const createdJob = await createVideoJob(cleanUrl);
 
@@ -102,6 +131,29 @@ function App() {
 
           {job.status === "failed" && (
             <p>Processing failed: {job.error ?? "Unknown error"}</p>
+          )}
+          {isLoadingShorts && <p>Loading generated shorts...</p>}
+
+          {shorts.length > 0 && (
+            <section>
+              <h2>Generated Shorts</h2>
+
+              {shorts.map((short) => (
+                <article key={short.id}>
+                  <h3>{short.title}</h3>
+
+                  <video src={short.videoUrl} controls width="300" />
+
+                  <p>{short.hook}</p>
+
+                  <p>Score: {short.score}/10</p>
+
+                  <p>Duration: {short.durationSeconds.toFixed(1)}s</p>
+
+                  <p>{short.reason}</p>
+                </article>
+              ))}
+            </section>
           )}
         </section>
       )}
